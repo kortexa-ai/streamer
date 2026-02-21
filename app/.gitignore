@@ -1,0 +1,14 @@
+# Generated Xcode project (regenerate with ./generate.sh)
+*.xcodeproj
+*.xcworkspace
+
+# Build
+build/
+DerivedData/
+
+# OS
+.DS_Store
+
+# Xcode user data
+xcuserdata/
+*.xcuserstate

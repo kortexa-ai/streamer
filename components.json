@@ -1,0 +1,179 @@
+[
+  {
+    "component": {
+      "id": "lipo-battery-3-7v-small",
+      "name": "Small LiPo Battery 3.7V",
+      "aliases": [
+        "LiPo battery",
+        "Lithium Polymer battery",
+        "3.7V battery",
+        "Li-Po battery",
+        "rechargeable battery 3.7V",
+        "single cell LiPo"
+      ],
+      "type": "other",
+      "description": "Small single-cell Lithium Polymer rechargeable battery with nominal voltage of 3.7V (4.2V fully charged, 3.0V discharged). Common capacities range from 100mAh to 2000mAh. Used to power Arduino and ESP32 projects. Requires proper charging circuit and protection.",
+      "pinRequirements": [
+        {
+          "type": "power",
+          "name": "VCC/BAT+",
+          "required": true,
+          "description": "Positive battery terminal. Connect to VIN, BAT, or through charging/protection circuit. Provides 3.0V-4.2V depending on charge state.",
+          "voltage": 3.7
+        },
+        {
+          "type": "ground",
+          "name": "GND/BAT-",
+          "required": true,
+          "description": "Negative battery terminal (ground). Connect to system ground."
+        }
+      ],
+      "libraries": [],
+      "pinConfiguration": {
+        "recommendedPins": [
+          "VIN",
+          "BAT",
+          "3.3V input (via regulator)"
+        ]
+      },
+      "physicalDimensions": {
+        "width": 20,
+        "height": 30,
+        "unit": "mm"
+      },
+      "exampleUsage": "Connect BAT+ to Arduino VIN or ESP32 BAT pin through a protection circuit (TP4056 or similar). Connect BAT- to GND. Use with voltage regulator if 3.3V is required. Never discharge below 3.0V or charge above 4.2V. Always use proper LiPo charging module.",
+      "datasheetUrl": "https://www.sparkfun.com/datasheets/Batteries/UnionBattery-3.7v.pdf"
+    },
+    "instanceId": "lipo-battery-3-7v-small_1",
+    "pinAssignments": [
+      {
+        "componentId": "lipo-battery-3-7v-small_1",
+        "pinName": "VCC/BAT+",
+        "boardPin": -1,
+        "function": "power"
+      },
+      {
+        "componentId": "lipo-battery-3-7v-small_1",
+        "pinName": "GND/BAT-",
+        "boardPin": -2,
+        "function": "ground"
+      }
+    ]
+  },
+  {
+    "component": {
+      "id": "button",
+      "name": "Push Button",
+      "aliases": [
+        "button",
+        "push button",
+        "switch",
+        "tactile switch"
+      ],
+      "type": "other",
+      "description": "Momentary push button switch",
+      "pinRequirements": [
+        {
+          "type": "ground",
+          "name": "GND",
+          "required": true
+        },
+        {
+          "type": "digital",
+          "name": "SIGNAL",
+          "required": true,
+          "description": "Signal pin (with pull-up resistor)"
+        }
+      ],
+      "libraries": [],
+      "pinConfiguration": {
+        "recommendedPins": [
+          "GPIO0",
+          "GPIO2",
+          "GPIO4",
+          "GPIO5",
+          "GPIO18",
+          "GPIO19"
+        ]
+      },
+      "physicalDimensions": {
+        "width": 6,
+        "height": 6,
+        "unit": "mm"
+      }
+    },
+    "instanceId": "button_2",
+    "pinAssignments": [
+      {
+        "componentId": "button_2",
+        "pinName": "GND",
+        "boardPin": -2,
+        "function": "ground"
+      },
+      {
+        "componentId": "button_2",
+        "pinName": "SIGNAL",
+        "boardPin": 0,
+        "function": "digital"
+      }
+    ]
+  },
+  {
+    "component": {
+      "id": "button",
+      "name": "Push Button",
+      "aliases": [
+        "button",
+        "push button",
+        "switch",
+        "tactile switch"
+      ],
+      "type": "other",
+      "description": "Momentary push button switch",
+      "pinRequirements": [
+        {
+          "type": "ground",
+          "name": "GND",
+          "required": true
+        },
+        {
+          "type": "digital",
+          "name": "SIGNAL",
+          "required": true,
+          "description": "Signal pin (with pull-up resistor)"
+        }
+      ],
+      "libraries": [],
+      "pinConfiguration": {
+        "recommendedPins": [
+          "GPIO0",
+          "GPIO2",
+          "GPIO4",
+          "GPIO5",
+          "GPIO18",
+          "GPIO19"
+        ]
+      },
+      "physicalDimensions": {
+        "width": 6,
+        "height": 6,
+        "unit": "mm"
+      }
+    },
+    "instanceId": "button_3",
+    "pinAssignments": [
+      {
+        "componentId": "button_3",
+        "pinName": "GND",
+        "boardPin": -2,
+        "function": "ground"
+      },
+      {
+        "componentId": "button_3",
+        "pinName": "SIGNAL",
+        "boardPin": 0,
+        "function": "digital"
+      }
+    ]
+  }
+]

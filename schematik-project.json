@@ -1,0 +1,793 @@
+{
+  "code": {
+    "code": "// ESP32S3 Video Streaming over WebSocket with BLE Configuration\n// Features: BLE WiFi config, video streaming control via BLE and button\n\n#include <Arduino.h>\n#include <WiFi.h>\n#include <WebSocketsClient.h>\n#include <BLEDevice.h>\n#include <BLEServer.h>\n#include <BLEUtils.h>\n#include <BLE2902.h>\n#include <Preferences.h>\n#include \"esp_camera.h\"\n\n// Pin definitions for XIAO ESP32S3 Sense camera\n#define PWDN_GPIO_NUM     -1\n#define RESET_GPIO_NUM    -1\n#define XCLK_GPIO_NUM     10\n#define SIOD_GPIO_NUM     40\n#define SIOC_GPIO_NUM     39\n#define Y9_GPIO_NUM       48\n#define Y8_GPIO_NUM       11\n#define Y7_GPIO_NUM       12\n#define Y6_GPIO_NUM       14\n#define Y5_GPIO_NUM       16\n#define Y4_GPIO_NUM       18\n#define Y3_GPIO_NUM       17\n#define Y2_GPIO_NUM       15\n#define VSYNC_GPIO_NUM    38\n#define HREF_GPIO_NUM     47\n#define PCLK_GPIO_NUM     13\n\n// Button pin\n#define BUTTON_PIN 0\n\n// BLE UUIDs\n#define SERVICE_UUID        \"4fafc201-1fb5-459e-8fcc-c5c9c331914b\"\n#define WIFI_SSID_CHAR_UUID \"beb5483e-36e1-4688-b7f5-ea07361b26a8\"\n#define WIFI_PASS_CHAR_UUID \"1c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e\"\n#define STREAM_CTRL_CHAR_UUID \"a7b3c5d9-8f6e-4a2b-9c1d-3e5f7a9b2c4d\"\n#define SERVER_URL_CHAR_UUID \"d4e5f6a7-b8c9-4d1e-2f3a-4b5c6d7e8f9a\"\n\n// Global variables\nWebSocketsClient webSocket;\nPreferences preferences;\nBLEServer* pServer = NULL;\nBLECharacteristic* pWifiSsidCharacteristic = NULL;\nBLECharacteristic* pWifiPassCharacteristic = NULL;\nBLECharacteristic* pStreamCtrlCharacteristic = NULL;\nBLECharacteristic* pServerUrlCharacteristic = NULL;\n\nString wifiSSID = \"\";\nString wifiPassword = \"\";\nString serverUrl = \"\";\nint serverPort = 8080;\nString serverPath = \"/video\";\n\nbool deviceConnected = false;\nbool oldDeviceConnected = false;\nbool wifiConfigured = false;\nbool streamActive = false;\nbool buttonPressed = false;\nunsigned long lastButtonPress = 0;\nconst unsigned long debounceDelay = 200;\n\ncamera_fb_t* fb = NULL;\n\n// BLE Server Callbacks\nclass MyServerCallbacks: public BLEServerCallbacks {\n    void onConnect(BLEServer* pServer) {\n        deviceConnected = true;\n        Serial.println(\"BLE Client Connected\");\n    };\n\n    void onDisconnect(BLEServer* pServer) {\n        deviceConnected = false;\n        Serial.println(\"BLE Client Disconnected\");\n    }\n};\n\n// WiFi SSID Characteristic Callback\nclass WifiSsidCallbacks: public BLECharacteristicCallbacks {\n    void onWrite(BLECharacteristic *pCharacteristic) {\n        String value = pCharacteristic->getValue().c_str();\n        if (value.length() > 0) {\n            wifiSSID = value;\n            preferences.putString(\"wifi_ssid\", wifiSSID);\n            Serial.println(\"WiFi SSID set: \" + wifiSSID);\n        }\n    }\n};\n\n// WiFi Password Characteristic Callback\nclass WifiPassCallbacks: public BLECharacteristicCallbacks {\n    void onWrite(BLECharacteristic *pCharacteristic) {\n        String value = pCharacteristic->getValue().c_str();\n        if (value.length() > 0) {\n            wifiPassword = value;\n            preferences.putString(\"wifi_pass\", wifiPassword);\n            Serial.println(\"WiFi Password set\");\n            wifiConfigured = true;\n        }\n    }\n};\n\n// Stream Control Characteristic Callback\nclass StreamCtrlCallbacks: public BLECharacteristicCallbacks {\n    void onWrite(BLECharacteristic *pCharacteristic) {\n        String value = pCharacteristic->getValue().c_str();\n        if (value.length() > 0) {\n            if (value == \"1\" || value == \"start\") {\n                streamActive = true;\n                Serial.println(\"Stream started via BLE\");\n            } else if (value == \"0\" || value == \"stop\") {\n                streamActive = false;\n                Serial.println(\"Stream stopped via BLE\");\n            }\n        }\n    }\n};\n\n// Server URL Characteristic Callback\nclass ServerUrlCallbacks: public BLECharacteristicCallbacks {\n    void onWrite(BLECharacteristic *pCharacteristic) {\n        String value = pCharacteristic->getValue().c_str();\n        if (value.length() > 0) {\n            serverUrl = value;\n            preferences.putString(\"server_url\", serverUrl);\n            Serial.println(\"Server URL set: \" + serverUrl);\n            parseServerUrl();\n        }\n    }\n};\n\nvoid parseServerUrl() {\n    // Parse server URL to extract host, port, path\n    // Format: ws://hostname:port/path or hostname:port/path\n    String url = serverUrl;\n    \n    if (url.startsWith(\"ws://\")) {\n        url = url.substring(5);\n    } else if (url.startsWith(\"wss://\")) {\n        url = url.substring(6);\n    }\n    \n    int portIndex = url.indexOf(':');\n    int pathIndex = url.indexOf('/');\n    \n    if (portIndex > 0 && pathIndex > portIndex) {\n        String host = url.substring(0, portIndex);\n        serverPort = url.substring(portIndex + 1, pathIndex).toInt();\n        serverPath = url.substring(pathIndex);\n    } else if (pathIndex > 0) {\n        String host = url.substring(0, pathIndex);\n        serverPort = 8080;\n        serverPath = url.substring(pathIndex);\n    }\n}\n\nvoid initBLE() {\n    Serial.println(\"Initializing BLE...\");\n    \n    BLEDevice::init(\"ESP32S3-Camera\");\n    \n    pServer = BLEDevice::createServer();\n    pServer->setCallbacks(new MyServerCallbacks());\n    \n    BLEService *pService = pServer->createService(SERVICE_UUID);\n    \n    // WiFi SSID Characteristic\n    pWifiSsidCharacteristic = pService->createCharacteristic(\n        WIFI_SSID_CHAR_UUID,\n        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE\n    );\n    pWifiSsidCharacteristic->setCallbacks(new WifiSsidCallbacks());\n    pWifiSsidCharacteristic->addDescriptor(new BLE2902());\n    \n    // WiFi Password Characteristic\n    pWifiPassCharacteristic = pService->createCharacteristic(\n        WIFI_PASS_CHAR_UUID,\n        BLECharacteristic::PROPERTY_WRITE\n    );\n    pWifiPassCharacteristic->setCallbacks(new WifiPassCallbacks());\n    pWifiPassCharacteristic->addDescriptor(new BLE2902());\n    \n    // Stream Control Characteristic\n    pStreamCtrlCharacteristic = pService->createCharacteristic(\n        STREAM_CTRL_CHAR_UUID,\n        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE\n    );\n    pStreamCtrlCharacteristic->setCallbacks(new StreamCtrlCallbacks());\n    pStreamCtrlCharacteristic->addDescriptor(new BLE2902());\n    \n    // Server URL Characteristic\n    pServerUrlCharacteristic = pService->createCharacteristic(\n        SERVER_URL_CHAR_UUID,\n        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE\n    );\n    pServerUrlCharacteristic->setCallbacks(new ServerUrlCallbacks());\n    pServerUrlCharacteristic->addDescriptor(new BLE2902());\n    \n    pService->start();\n    \n    BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();\n    pAdvertising->addServiceUUID(SERVICE_UUID);\n    pAdvertising->setScanResponse(true);\n    pAdvertising->setMinPreferred(0x06);\n    pAdvertising->setMinPreferred(0x12);\n    BLEDevice::startAdvertising();\n    \n    Serial.println(\"BLE advertising started\");\n}\n\nvoid initCamera() {\n    Serial.println(\"Initializing camera...\");\n    \n    camera_config_t config;\n    config.ledc_channel = LEDC_CHANNEL_0;\n    config.ledc_timer = LEDC_TIMER_0;\n    config.pin_d0 = Y2_GPIO_NUM;\n    config.pin_d1 = Y3_GPIO_NUM;\n    config.pin_d2 = Y4_GPIO_NUM;\n    config.pin_d3 = Y5_GPIO_NUM;\n    config.pin_d4 = Y6_GPIO_NUM;\n    config.pin_d5 = Y7_GPIO_NUM;\n    config.pin_d6 = Y8_GPIO_NUM;\n    config.pin_d7 = Y9_GPIO_NUM;\n    config.pin_xclk = XCLK_GPIO_NUM;\n    config.pin_pclk = PCLK_GPIO_NUM;\n    config.pin_vsync = VSYNC_GPIO_NUM;\n    config.pin_href = HREF_GPIO_NUM;\n    config.pin_sccb_sda = SIOD_GPIO_NUM;\n    config.pin_sccb_scl = SIOC_GPIO_NUM;\n    config.pin_pwdn = PWDN_GPIO_NUM;\n    config.pin_reset = RESET_GPIO_NUM;\n    config.xclk_freq_hz = 20000000;\n    config.pixel_format = PIXFORMAT_JPEG;\n    config.frame_size = FRAMESIZE_VGA;\n    config.jpeg_quality = 12;\n    config.fb_count = 2;\n    config.grab_mode = CAMERA_GRAB_LATEST;\n    \n    esp_err_t err = esp_camera_init(&config);\n    if (err != ESP_OK) {\n        Serial.printf(\"Camera init failed with error 0x%x\\n\", err);\n        return;\n    }\n    \n    sensor_t * s = esp_camera_sensor_get();\n    if (s) {\n        s->set_vflip(s, 1);\n        s->set_hmirror(s, 1);\n    }\n    \n    Serial.println(\"Camera initialized successfully\");\n}\n\nvoid connectWiFi() {\n    if (wifiSSID.length() == 0) {\n        Serial.println(\"WiFi SSID not configured\");\n        return;\n    }\n    \n    Serial.print(\"Connecting to WiFi: \");\n    Serial.println(wifiSSID);\n    \n    WiFi.mode(WIFI_STA);\n    WiFi.begin(wifiSSID.c_str(), wifiPassword.c_str());\n    \n    int attempts = 0;\n    while (WiFi.status() != WL_CONNECTED && attempts < 30) {\n        delay(500);\n        Serial.print(\".\");\n        attempts++;\n    }\n    \n    if (WiFi.status() == WL_CONNECTED) {\n        Serial.println(\"\\nWiFi connected\");\n        Serial.print(\"IP address: \");\n        Serial.println(WiFi.localIP());\n    } else {\n        Serial.println(\"\\nWiFi connection failed\");\n    }\n}\n\nvoid webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {\n    switch(type) {\n        case WStype_DISCONNECTED:\n            Serial.println(\"WebSocket Disconnected\");\n            break;\n        case WStype_CONNECTED:\n            Serial.println(\"WebSocket Connected\");\n            break;\n        case WStype_TEXT:\n            Serial.printf(\"WebSocket message: %s\\n\", payload);\n            break;\n        case WStype_BIN:\n            break;\n        case WStype_ERROR:\n            Serial.println(\"WebSocket Error\");\n            break;\n    }\n}\n\nvoid connectWebSocket() {\n    if (serverUrl.length() == 0) {\n        Serial.println(\"Server URL not configured\");\n        return;\n    }\n    \n    parseServerUrl();\n    \n    String host = serverUrl;\n    if (host.startsWith(\"ws://\")) {\n        host = host.substring(5);\n    } else if (host.startsWith(\"wss://\")) {\n        host = host.substring(6);\n    }\n    \n    int portIndex = host.indexOf(':');\n    if (portIndex > 0) {\n        host = host.substring(0, portIndex);\n    } else {\n        int pathIndex = host.indexOf('/');\n        if (pathIndex > 0) {\n            host = host.substring(0, pathIndex);\n        }\n    }\n    \n    Serial.printf(\"Connecting to WebSocket: %s:%d%s\\n\", host.c_str(), serverPort, serverPath.c_str());\n    webSocket.begin(host, serverPort, serverPath);\n    webSocket.onEvent(webSocketEvent);\n    webSocket.setReconnectInterval(5000);\n}\n\nvoid sendFrame() {\n    if (!webSocket.isConnected()) {\n        return;\n    }\n    \n    fb = esp_camera_fb_get();\n    if (!fb) {\n        Serial.println(\"Camera capture failed\");\n        return;\n    }\n    \n    if (fb->format != PIXFORMAT_JPEG) {\n        Serial.println(\"Non-JPEG frame detected\");\n        esp_camera_fb_return(fb);\n        return;\n    }\n    \n    // Send frame via WebSocket\n    webSocket.sendBIN(fb->buf, fb->len);\n    \n    esp_camera_fb_return(fb);\n}\n\nvoid handleButton() {\n    int buttonState = digitalRead(BUTTON_PIN);\n    unsigned long currentTime = millis();\n    \n    if (buttonState == LOW && !buttonPressed && (currentTime - lastButtonPress > debounceDelay)) {\n        buttonPressed = true;\n        lastButtonPress = currentTime;\n        streamActive = !streamActive;\n        \n        if (streamActive) {\n            Serial.println(\"Stream started via button\");\n        } else {\n            Serial.println(\"Stream stopped via button\");\n        }\n    } else if (buttonState == HIGH) {\n        buttonPressed = false;\n    }\n}\n\nvoid setup() {\n    Serial.begin(115200);\n    delay(1000);\n    \n    Serial.println(\"ESP32S3 Camera WebSocket Streamer\");\n    \n    // Initialize preferences\n    preferences.begin(\"camera-ws\", false);\n    \n    // Load saved WiFi credentials\n    wifiSSID = preferences.getString(\"wifi_ssid\", \"\");\n    wifiPassword = preferences.getString(\"wifi_pass\", \"\");\n    serverUrl = preferences.getString(\"server_url\", \"\");\n    \n    if (wifiSSID.length() > 0 && wifiPassword.length() > 0) {\n        wifiConfigured = true;\n    }",
+    "platform": "esp32",
+    "libraries": [],
+    "pinDefinitions": {}
+  },
+  "diagram": {
+    "nodes": [
+      {
+        "id": "lipo-battery-3-7v-small_1",
+        "type": "component",
+        "position": {
+          "x": 130,
+          "y": 100
+        },
+        "data": {
+          "component": {
+            "id": "lipo-battery-3-7v-small",
+            "name": "Small LiPo Battery 3.7V",
+            "aliases": [
+              "LiPo battery",
+              "Lithium Polymer battery",
+              "3.7V battery",
+              "Li-Po battery",
+              "rechargeable battery 3.7V",
+              "single cell LiPo"
+            ],
+            "type": "other",
+            "description": "Small single-cell Lithium Polymer rechargeable battery with nominal voltage of 3.7V (4.2V fully charged, 3.0V discharged). Common capacities range from 100mAh to 2000mAh. Used to power Arduino and ESP32 projects. Requires proper charging circuit and protection.",
+            "pinRequirements": [
+              {
+                "type": "power",
+                "name": "VCC/BAT+",
+                "required": true,
+                "description": "Positive battery terminal. Connect to VIN, BAT, or through charging/protection circuit. Provides 3.0V-4.2V depending on charge state.",
+                "voltage": 3.7
+              },
+              {
+                "type": "ground",
+                "name": "GND/BAT-",
+                "required": true,
+                "description": "Negative battery terminal (ground). Connect to system ground."
+              }
+            ],
+            "libraries": [],
+            "pinConfiguration": {
+              "recommendedPins": [
+                "VIN",
+                "BAT",
+                "3.3V input (via regulator)"
+              ]
+            },
+            "physicalDimensions": {
+              "width": 20,
+              "height": 30,
+              "unit": "mm"
+            },
+            "exampleUsage": "Connect BAT+ to Arduino VIN or ESP32 BAT pin through a protection circuit (TP4056 or similar). Connect BAT- to GND. Use with voltage regulator if 3.3V is required. Never discharge below 3.0V or charge above 4.2V. Always use proper LiPo charging module.",
+            "datasheetUrl": "https://www.sparkfun.com/datasheets/Batteries/UnionBattery-3.7v.pdf"
+          },
+          "instanceId": "lipo-battery-3-7v-small_1",
+          "label": "Small LiPo Battery 3.7V"
+        }
+      },
+      {
+        "id": "button_2",
+        "type": "component",
+        "position": {
+          "x": 1170,
+          "y": 100
+        },
+        "data": {
+          "component": {
+            "id": "button",
+            "name": "Push Button",
+            "aliases": [
+              "button",
+              "push button",
+              "switch",
+              "tactile switch"
+            ],
+            "type": "other",
+            "description": "Momentary push button switch",
+            "pinRequirements": [
+              {
+                "type": "ground",
+                "name": "GND",
+                "required": true
+              },
+              {
+                "type": "digital",
+                "name": "SIGNAL",
+                "required": true,
+                "description": "Signal pin (with pull-up resistor)"
+              }
+            ],
+            "libraries": [],
+            "pinConfiguration": {
+              "recommendedPins": [
+                "GPIO0",
+                "GPIO2",
+                "GPIO4",
+                "GPIO5",
+                "GPIO18",
+                "GPIO19"
+              ]
+            },
+            "physicalDimensions": {
+              "width": 6,
+              "height": 6,
+              "unit": "mm"
+            }
+          },
+          "instanceId": "button_2",
+          "label": "Push Button"
+        }
+      },
+      {
+        "id": "button_3",
+        "type": "component",
+        "position": {
+          "x": 130,
+          "y": 320
+        },
+        "data": {
+          "component": {
+            "id": "button",
+            "name": "Push Button",
+            "aliases": [
+              "button",
+              "push button",
+              "switch",
+              "tactile switch"
+            ],
+            "type": "other",
+            "description": "Momentary push button switch",
+            "pinRequirements": [
+              {
+                "type": "ground",
+                "name": "GND",
+                "required": true
+              },
+              {
+                "type": "digital",
+                "name": "SIGNAL",
+                "required": true,
+                "description": "Signal pin (with pull-up resistor)"
+              }
+            ],
+            "libraries": [],
+            "pinConfiguration": {
+              "recommendedPins": [
+                "GPIO0",
+                "GPIO2",
+                "GPIO4",
+                "GPIO5",
+                "GPIO18",
+                "GPIO19"
+              ]
+            },
+            "physicalDimensions": {
+              "width": 6,
+              "height": 6,
+              "unit": "mm"
+            }
+          },
+          "instanceId": "button_3",
+          "label": "Push Button"
+        }
+      },
+      {
+        "id": "board",
+        "type": "board",
+        "position": {
+          "x": 650,
+          "y": 210
+        },
+        "data": {
+          "component": {
+            "id": "board",
+            "name": "ESP32 DevKit v1",
+            "aliases": [],
+            "type": "board",
+            "description": "Microcontroller board",
+            "pinRequirements": [],
+            "libraries": []
+          },
+          "instanceId": "board",
+          "label": "ESP32 DevKit v1",
+          "pins": [
+            {
+              "gpio": 0,
+              "label": "GPIO0",
+              "functions": [
+                "gpio",
+                "pwm"
+              ],
+              "notes": "Boot button, use with caution",
+              "recommended": false
+            },
+            {
+              "gpio": 1,
+              "label": "GPIO1",
+              "functions": [
+                "gpio",
+                "uart",
+                "pwm"
+              ],
+              "notes": "TX0",
+              "recommended": false
+            },
+            {
+              "gpio": 2,
+              "label": "GPIO2",
+              "functions": [
+                "gpio",
+                "adc",
+                "pwm"
+              ],
+              "notes": "ADC1_CH2",
+              "recommended": true
+            },
+            {
+              "gpio": 3,
+              "label": "GPIO3",
+              "functions": [
+                "gpio",
+                "uart",
+                "pwm"
+              ],
+              "notes": "RX0",
+              "recommended": false
+            },
+            {
+              "gpio": 4,
+              "label": "GPIO4",
+              "functions": [
+                "gpio",
+                "adc",
+                "pwm"
+              ],
+              "notes": "ADC1_CH0",
+              "recommended": true
+            },
+            {
+              "gpio": 5,
+              "label": "GPIO5",
+              "functions": [
+                "gpio",
+                "adc",
+                "pwm"
+              ],
+              "notes": "ADC1_CH3",
+              "recommended": true
+            },
+            {
+              "gpio": 12,
+              "label": "GPIO12",
+              "functions": [
+                "gpio",
+                "adc",
+                "pwm"
+              ],
+              "notes": "ADC2_CH5, boot strapping pin",
+              "recommended": false
+            },
+            {
+              "gpio": 13,
+              "label": "GPIO13",
+              "functions": [
+                "gpio",
+                "adc",
+                "pwm"
+              ],
+              "notes": "ADC2_CH4",
+              "recommended": true
+            },
+            {
+              "gpio": 14,
+              "label": "GPIO14",
+              "functions": [
+                "gpio",
+                "adc",
+                "pwm"
+              ],
+              "notes": "ADC2_CH6",
+              "recommended": true
+            },
+            {
+              "gpio": 15,
+              "label": "GPIO15",
+              "functions": [
+                "gpio",
+                "adc",
+                "pwm"
+              ],
+              "notes": "ADC2_CH3, boot strapping pin",
+              "recommended": false
+            },
+            {
+              "gpio": 16,
+              "label": "GPIO16",
+              "functions": [
+                "gpio",
+                "pwm"
+              ],
+              "recommended": true
+            },
+            {
+              "gpio": 17,
+              "label": "GPIO17",
+              "functions": [
+                "gpio",
+                "pwm"
+              ],
+              "recommended": true
+            },
+            {
+              "gpio": 18,
+              "label": "GPIO18",
+              "functions": [
+                "gpio",
+                "spi",
+                "pwm"
+              ],
+              "notes": "SPI SCK",
+              "recommended": true
+            },
+            {
+              "gpio": 19,
+              "label": "GPIO19",
+              "functions": [
+                "gpio",
+                "spi",
+                "pwm"
+              ],
+              "notes": "SPI MISO",
+              "recommended": true
+            },
+            {
+              "gpio": 21,
+              "label": "GPIO21",
+              "functions": [
+                "gpio",
+                "i2c",
+                "pwm"
+              ],
+              "notes": "I2C SDA",
+              "recommended": true
+            },
+            {
+              "gpio": 22,
+              "label": "GPIO22",
+              "functions": [
+                "gpio",
+                "i2c",
+                "pwm"
+              ],
+              "notes": "I2C SCL",
+              "recommended": true
+            },
+            {
+              "gpio": 23,
+              "label": "GPIO23",
+              "functions": [
+                "gpio",
+                "spi",
+                "pwm"
+              ],
+              "notes": "SPI MOSI",
+              "recommended": true
+            },
+            {
+              "gpio": 25,
+              "label": "GPIO25",
+              "functions": [
+                "gpio",
+                "adc",
+                "pwm"
+              ],
+              "notes": "ADC1_CH8, DAC_1",
+              "recommended": true
+            },
+            {
+              "gpio": 26,
+              "label": "GPIO26",
+              "functions": [
+                "gpio",
+                "adc",
+                "pwm"
+              ],
+              "notes": "ADC1_CH9, DAC_2",
+              "recommended": true
+            },
+            {
+              "gpio": 27,
+              "label": "GPIO27",
+              "functions": [
+                "gpio",
+                "adc",
+                "pwm"
+              ],
+              "notes": "ADC1_CH7",
+              "recommended": true
+            },
+            {
+              "gpio": 32,
+              "label": "GPIO32",
+              "functions": [
+                "gpio",
+                "adc",
+                "pwm"
+              ],
+              "notes": "ADC1_CH4",
+              "recommended": true
+            },
+            {
+              "gpio": 33,
+              "label": "GPIO33",
+              "functions": [
+                "gpio",
+                "adc",
+                "pwm"
+              ],
+              "notes": "ADC1_CH5",
+              "recommended": true
+            },
+            {
+              "gpio": 34,
+              "label": "GPIO34",
+              "functions": [
+                "gpio",
+                "adc"
+              ],
+              "notes": "Input only, ADC1_CH6",
+              "recommended": true
+            },
+            {
+              "gpio": 35,
+              "label": "GPIO35",
+              "functions": [
+                "gpio",
+                "adc"
+              ],
+              "notes": "Input only, ADC1_CH7",
+              "recommended": true
+            },
+            {
+              "gpio": 36,
+              "label": "GPIO36",
+              "functions": [
+                "gpio",
+                "adc"
+              ],
+              "notes": "Input only, ADC1_CH0 (VP)",
+              "recommended": true
+            },
+            {
+              "gpio": 39,
+              "label": "GPIO39",
+              "functions": [
+                "gpio",
+                "adc"
+              ],
+              "notes": "Input only, ADC1_CH3 (VN)",
+              "recommended": true
+            }
+          ],
+          "specialPins": {
+            "i2c": {
+              "sda": 21,
+              "scl": 22
+            },
+            "spi": {
+              "mosi": 23,
+              "miso": 19,
+              "sck": 18,
+              "cs": 5
+            },
+            "power": {
+              "vcc": 3.3,
+              "gnd": 0,
+              "vin": 5
+            }
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-0",
+        "source": "lipo-battery-3-7v-small_1",
+        "target": "board",
+        "sourceHandle": "VCC/BAT+",
+        "targetHandle": "power",
+        "type": "smoothstep",
+        "data": {
+          "wireType": "power",
+          "label": "VCC/BAT+ → VCC",
+          "color": "#ff0000"
+        }
+      },
+      {
+        "id": "edge-1",
+        "source": "lipo-battery-3-7v-small_1",
+        "target": "board",
+        "sourceHandle": "GND/BAT-",
+        "targetHandle": "ground",
+        "type": "smoothstep",
+        "data": {
+          "wireType": "ground",
+          "label": "GND/BAT- → GND",
+          "color": "#000000"
+        }
+      },
+      {
+        "id": "edge-2",
+        "source": "button_2",
+        "target": "board",
+        "sourceHandle": "GND",
+        "targetHandle": "ground",
+        "type": "smoothstep",
+        "data": {
+          "wireType": "ground",
+          "label": "GND → GND",
+          "color": "#000000"
+        }
+      },
+      {
+        "id": "edge-3",
+        "source": "button_3",
+        "target": "board",
+        "sourceHandle": "GND",
+        "targetHandle": "ground",
+        "type": "smoothstep",
+        "data": {
+          "wireType": "ground",
+          "label": "GND → GND",
+          "color": "#000000"
+        }
+      }
+    ]
+  },
+  "pinTable": [
+    {
+      "componentId": "lipo-battery-3-7v-small_1",
+      "pinName": "VCC/BAT+",
+      "boardPin": -1,
+      "function": "power"
+    },
+    {
+      "componentId": "lipo-battery-3-7v-small_1",
+      "pinName": "GND/BAT-",
+      "boardPin": -2,
+      "function": "ground"
+    },
+    {
+      "componentId": "button_2",
+      "pinName": "GND",
+      "boardPin": -2,
+      "function": "ground"
+    },
+    {
+      "componentId": "button_2",
+      "pinName": "SIGNAL",
+      "boardPin": 0,
+      "function": "digital"
+    },
+    {
+      "componentId": "button_3",
+      "pinName": "GND",
+      "boardPin": -2,
+      "function": "ground"
+    },
+    {
+      "componentId": "button_3",
+      "pinName": "SIGNAL",
+      "boardPin": 0,
+      "function": "digital"
+    }
+  ],
+  "components": [
+    {
+      "component": {
+        "id": "lipo-battery-3-7v-small",
+        "name": "Small LiPo Battery 3.7V",
+        "aliases": [
+          "LiPo battery",
+          "Lithium Polymer battery",
+          "3.7V battery",
+          "Li-Po battery",
+          "rechargeable battery 3.7V",
+          "single cell LiPo"
+        ],
+        "type": "other",
+        "description": "Small single-cell Lithium Polymer rechargeable battery with nominal voltage of 3.7V (4.2V fully charged, 3.0V discharged). Common capacities range from 100mAh to 2000mAh. Used to power Arduino and ESP32 projects. Requires proper charging circuit and protection.",
+        "pinRequirements": [
+          {
+            "type": "power",
+            "name": "VCC/BAT+",
+            "required": true,
+            "description": "Positive battery terminal. Connect to VIN, BAT, or through charging/protection circuit. Provides 3.0V-4.2V depending on charge state.",
+            "voltage": 3.7
+          },
+          {
+            "type": "ground",
+            "name": "GND/BAT-",
+            "required": true,
+            "description": "Negative battery terminal (ground). Connect to system ground."
+          }
+        ],
+        "libraries": [],
+        "pinConfiguration": {
+          "recommendedPins": [
+            "VIN",
+            "BAT",
+            "3.3V input (via regulator)"
+          ]
+        },
+        "physicalDimensions": {
+          "width": 20,
+          "height": 30,
+          "unit": "mm"
+        },
+        "exampleUsage": "Connect BAT+ to Arduino VIN or ESP32 BAT pin through a protection circuit (TP4056 or similar). Connect BAT- to GND. Use with voltage regulator if 3.3V is required. Never discharge below 3.0V or charge above 4.2V. Always use proper LiPo charging module.",
+        "datasheetUrl": "https://www.sparkfun.com/datasheets/Batteries/UnionBattery-3.7v.pdf"
+      },
+      "instanceId": "lipo-battery-3-7v-small_1",
+      "pinAssignments": [
+        {
+          "componentId": "lipo-battery-3-7v-small_1",
+          "pinName": "VCC/BAT+",
+          "boardPin": -1,
+          "function": "power"
+        },
+        {
+          "componentId": "lipo-battery-3-7v-small_1",
+          "pinName": "GND/BAT-",
+          "boardPin": -2,
+          "function": "ground"
+        }
+      ]
+    },
+    {
+      "component": {
+        "id": "button",
+        "name": "Push Button",
+        "aliases": [
+          "button",
+          "push button",
+          "switch",
+          "tactile switch"
+        ],
+        "type": "other",
+        "description": "Momentary push button switch",
+        "pinRequirements": [
+          {
+            "type": "ground",
+            "name": "GND",
+            "required": true
+          },
+          {
+            "type": "digital",
+            "name": "SIGNAL",
+            "required": true,
+            "description": "Signal pin (with pull-up resistor)"
+          }
+        ],
+        "libraries": [],
+        "pinConfiguration": {
+          "recommendedPins": [
+            "GPIO0",
+            "GPIO2",
+            "GPIO4",
+            "GPIO5",
+            "GPIO18",
+            "GPIO19"
+          ]
+        },
+        "physicalDimensions": {
+          "width": 6,
+          "height": 6,
+          "unit": "mm"
+        }
+      },
+      "instanceId": "button_2",
+      "pinAssignments": [
+        {
+          "componentId": "button_2",
+          "pinName": "GND",
+          "boardPin": -2,
+          "function": "ground"
+        },
+        {
+          "componentId": "button_2",
+          "pinName": "SIGNAL",
+          "boardPin": 0,
+          "function": "digital"
+        }
+      ]
+    },
+    {
+      "component": {
+        "id": "button",
+        "name": "Push Button",
+        "aliases": [
+          "button",
+          "push button",
+          "switch",
+          "tactile switch"
+        ],
+        "type": "other",
+        "description": "Momentary push button switch",
+        "pinRequirements": [
+          {
+            "type": "ground",
+            "name": "GND",
+            "required": true
+          },
+          {
+            "type": "digital",
+            "name": "SIGNAL",
+            "required": true,
+            "description": "Signal pin (with pull-up resistor)"
+          }
+        ],
+        "libraries": [],
+        "pinConfiguration": {
+          "recommendedPins": [
+            "GPIO0",
+            "GPIO2",
+            "GPIO4",
+            "GPIO5",
+            "GPIO18",
+            "GPIO19"
+          ]
+        },
+        "physicalDimensions": {
+          "width": 6,
+          "height": 6,
+          "unit": "mm"
+        }
+      },
+      "instanceId": "button_3",
+      "pinAssignments": [
+        {
+          "componentId": "button_3",
+          "pinName": "GND",
+          "boardPin": -2,
+          "function": "ground"
+        },
+        {
+          "componentId": "button_3",
+          "pinName": "SIGNAL",
+          "boardPin": 0,
+          "function": "digital"
+        }
+      ]
+    }
+  ],
+  "assemblyInstructions": [
+    {
+      "step": 1,
+      "title": "Prepare Components",
+      "description": "Gather all required components and verify they are in working condition.",
+      "components": [
+        "lipo-battery-3-7v-small_1",
+        "button_2",
+        "button_3"
+      ],
+      "tips": [
+        "Check component datasheets for voltage requirements"
+      ]
+    },
+    {
+      "step": 2,
+      "title": "Connect Components",
+      "description": "Follow the pin mapping table to connect all components.",
+      "components": [
+        "lipo-battery-3-7v-small_1",
+        "button_2",
+        "button_3"
+      ],
+      "tips": [
+        "Double-check all connections before powering on"
+      ],
+      "warnings": [
+        "Always verify connections before powering on to prevent damage"
+      ]
+    }
+  ]
+}

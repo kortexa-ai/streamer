@@ -1,0 +1,21 @@
+name: Streamer
+options:
+  bundleIdPrefix: ai.kortexa
+  deploymentTarget:
+    iOS: "17.0"
+targets:
+  Streamer:
+    type: application
+    platform: iOS
+    sources:
+      - Streamer
+    settings:
+      base:
+        INFOPLIST_FILE: Streamer/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Streamer/Streamer.entitlements
+        DEVELOPMENT_TEAM: C49792BN94
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.9"
+        CODE_SIGN_STYLE: Automatic

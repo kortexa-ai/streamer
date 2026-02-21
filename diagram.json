@@ -1,0 +1,537 @@
+{
+  "nodes": [
+    {
+      "id": "lipo-battery-3-7v-small_1",
+      "type": "component",
+      "position": {
+        "x": 130,
+        "y": 100
+      },
+      "data": {
+        "component": {
+          "id": "lipo-battery-3-7v-small",
+          "name": "Small LiPo Battery 3.7V",
+          "aliases": [
+            "LiPo battery",
+            "Lithium Polymer battery",
+            "3.7V battery",
+            "Li-Po battery",
+            "rechargeable battery 3.7V",
+            "single cell LiPo"
+          ],
+          "type": "other",
+          "description": "Small single-cell Lithium Polymer rechargeable battery with nominal voltage of 3.7V (4.2V fully charged, 3.0V discharged). Common capacities range from 100mAh to 2000mAh. Used to power Arduino and ESP32 projects. Requires proper charging circuit and protection.",
+          "pinRequirements": [
+            {
+              "type": "power",
+              "name": "VCC/BAT+",
+              "required": true,
+              "description": "Positive battery terminal. Connect to VIN, BAT, or through charging/protection circuit. Provides 3.0V-4.2V depending on charge state.",
+              "voltage": 3.7
+            },
+            {
+              "type": "ground",
+              "name": "GND/BAT-",
+              "required": true,
+              "description": "Negative battery terminal (ground). Connect to system ground."
+            }
+          ],
+          "libraries": [],
+          "pinConfiguration": {
+            "recommendedPins": [
+              "VIN",
+              "BAT",
+              "3.3V input (via regulator)"
+            ]
+          },
+          "physicalDimensions": {
+            "width": 20,
+            "height": 30,
+            "unit": "mm"
+          },
+          "exampleUsage": "Connect BAT+ to Arduino VIN or ESP32 BAT pin through a protection circuit (TP4056 or similar). Connect BAT- to GND. Use with voltage regulator if 3.3V is required. Never discharge below 3.0V or charge above 4.2V. Always use proper LiPo charging module.",
+          "datasheetUrl": "https://www.sparkfun.com/datasheets/Batteries/UnionBattery-3.7v.pdf"
+        },
+        "instanceId": "lipo-battery-3-7v-small_1",
+        "label": "Small LiPo Battery 3.7V"
+      }
+    },
+    {
+      "id": "button_2",
+      "type": "component",
+      "position": {
+        "x": 1170,
+        "y": 100
+      },
+      "data": {
+        "component": {
+          "id": "button",
+          "name": "Push Button",
+          "aliases": [
+            "button",
+            "push button",
+            "switch",
+            "tactile switch"
+          ],
+          "type": "other",
+          "description": "Momentary push button switch",
+          "pinRequirements": [
+            {
+              "type": "ground",
+              "name": "GND",
+              "required": true
+            },
+            {
+              "type": "digital",
+              "name": "SIGNAL",
+              "required": true,
+              "description": "Signal pin (with pull-up resistor)"
+            }
+          ],
+          "libraries": [],
+          "pinConfiguration": {
+            "recommendedPins": [
+              "GPIO0",
+              "GPIO2",
+              "GPIO4",
+              "GPIO5",
+              "GPIO18",
+              "GPIO19"
+            ]
+          },
+          "physicalDimensions": {
+            "width": 6,
+            "height": 6,
+            "unit": "mm"
+          }
+        },
+        "instanceId": "button_2",
+        "label": "Push Button"
+      }
+    },
+    {
+      "id": "button_3",
+      "type": "component",
+      "position": {
+        "x": 130,
+        "y": 320
+      },
+      "data": {
+        "component": {
+          "id": "button",
+          "name": "Push Button",
+          "aliases": [
+            "button",
+            "push button",
+            "switch",
+            "tactile switch"
+          ],
+          "type": "other",
+          "description": "Momentary push button switch",
+          "pinRequirements": [
+            {
+              "type": "ground",
+              "name": "GND",
+              "required": true
+            },
+            {
+              "type": "digital",
+              "name": "SIGNAL",
+              "required": true,
+              "description": "Signal pin (with pull-up resistor)"
+            }
+          ],
+          "libraries": [],
+          "pinConfiguration": {
+            "recommendedPins": [
+              "GPIO0",
+              "GPIO2",
+              "GPIO4",
+              "GPIO5",
+              "GPIO18",
+              "GPIO19"
+            ]
+          },
+          "physicalDimensions": {
+            "width": 6,
+            "height": 6,
+            "unit": "mm"
+          }
+        },
+        "instanceId": "button_3",
+        "label": "Push Button"
+      }
+    },
+    {
+      "id": "board",
+      "type": "board",
+      "position": {
+        "x": 650,
+        "y": 210
+      },
+      "data": {
+        "component": {
+          "id": "board",
+          "name": "ESP32 DevKit v1",
+          "aliases": [],
+          "type": "board",
+          "description": "Microcontroller board",
+          "pinRequirements": [],
+          "libraries": []
+        },
+        "instanceId": "board",
+        "label": "ESP32 DevKit v1",
+        "pins": [
+          {
+            "gpio": 0,
+            "label": "GPIO0",
+            "functions": [
+              "gpio",
+              "pwm"
+            ],
+            "notes": "Boot button, use with caution",
+            "recommended": false
+          },
+          {
+            "gpio": 1,
+            "label": "GPIO1",
+            "functions": [
+              "gpio",
+              "uart",
+              "pwm"
+            ],
+            "notes": "TX0",
+            "recommended": false
+          },
+          {
+            "gpio": 2,
+            "label": "GPIO2",
+            "functions": [
+              "gpio",
+              "adc",
+              "pwm"
+            ],
+            "notes": "ADC1_CH2",
+            "recommended": true
+          },
+          {
+            "gpio": 3,
+            "label": "GPIO3",
+            "functions": [
+              "gpio",
+              "uart",
+              "pwm"
+            ],
+            "notes": "RX0",
+            "recommended": false
+          },
+          {
+            "gpio": 4,
+            "label": "GPIO4",
+            "functions": [
+              "gpio",
+              "adc",
+              "pwm"
+            ],
+            "notes": "ADC1_CH0",
+            "recommended": true
+          },
+          {
+            "gpio": 5,
+            "label": "GPIO5",
+            "functions": [
+              "gpio",
+              "adc",
+              "pwm"
+            ],
+            "notes": "ADC1_CH3",
+            "recommended": true
+          },
+          {
+            "gpio": 12,
+            "label": "GPIO12",
+            "functions": [
+              "gpio",
+              "adc",
+              "pwm"
+            ],
+            "notes": "ADC2_CH5, boot strapping pin",
+            "recommended": false
+          },
+          {
+            "gpio": 13,
+            "label": "GPIO13",
+            "functions": [
+              "gpio",
+              "adc",
+              "pwm"
+            ],
+            "notes": "ADC2_CH4",
+            "recommended": true
+          },
+          {
+            "gpio": 14,
+            "label": "GPIO14",
+            "functions": [
+              "gpio",
+              "adc",
+              "pwm"
+            ],
+            "notes": "ADC2_CH6",
+            "recommended": true
+          },
+          {
+            "gpio": 15,
+            "label": "GPIO15",
+            "functions": [
+              "gpio",
+              "adc",
+              "pwm"
+            ],
+            "notes": "ADC2_CH3, boot strapping pin",
+            "recommended": false
+          },
+          {
+            "gpio": 16,
+            "label": "GPIO16",
+            "functions": [
+              "gpio",
+              "pwm"
+            ],
+            "recommended": true
+          },
+          {
+            "gpio": 17,
+            "label": "GPIO17",
+            "functions": [
+              "gpio",
+              "pwm"
+            ],
+            "recommended": true
+          },
+          {
+            "gpio": 18,
+            "label": "GPIO18",
+            "functions": [
+              "gpio",
+              "spi",
+              "pwm"
+            ],
+            "notes": "SPI SCK",
+            "recommended": true
+          },
+          {
+            "gpio": 19,
+            "label": "GPIO19",
+            "functions": [
+              "gpio",
+              "spi",
+              "pwm"
+            ],
+            "notes": "SPI MISO",
+            "recommended": true
+          },
+          {
+            "gpio": 21,
+            "label": "GPIO21",
+            "functions": [
+              "gpio",
+              "i2c",
+              "pwm"
+            ],
+            "notes": "I2C SDA",
+            "recommended": true
+          },
+          {
+            "gpio": 22,
+            "label": "GPIO22",
+            "functions": [
+              "gpio",
+              "i2c",
+              "pwm"
+            ],
+            "notes": "I2C SCL",
+            "recommended": true
+          },
+          {
+            "gpio": 23,
+            "label": "GPIO23",
+            "functions": [
+              "gpio",
+              "spi",
+              "pwm"
+            ],
+            "notes": "SPI MOSI",
+            "recommended": true
+          },
+          {
+            "gpio": 25,
+            "label": "GPIO25",
+            "functions": [
+              "gpio",
+              "adc",
+              "pwm"
+            ],
+            "notes": "ADC1_CH8, DAC_1",
+            "recommended": true
+          },
+          {
+            "gpio": 26,
+            "label": "GPIO26",
+            "functions": [
+              "gpio",
+              "adc",
+              "pwm"
+            ],
+            "notes": "ADC1_CH9, DAC_2",
+            "recommended": true
+          },
+          {
+            "gpio": 27,
+            "label": "GPIO27",
+            "functions": [
+              "gpio",
+              "adc",
+              "pwm"
+            ],
+            "notes": "ADC1_CH7",
+            "recommended": true
+          },
+          {
+            "gpio": 32,
+            "label": "GPIO32",
+            "functions": [
+              "gpio",
+              "adc",
+              "pwm"
+            ],
+            "notes": "ADC1_CH4",
+            "recommended": true
+          },
+          {
+            "gpio": 33,
+            "label": "GPIO33",
+            "functions": [
+              "gpio",
+              "adc",
+              "pwm"
+            ],
+            "notes": "ADC1_CH5",
+            "recommended": true
+          },
+          {
+            "gpio": 34,
+            "label": "GPIO34",
+            "functions": [
+              "gpio",
+              "adc"
+            ],
+            "notes": "Input only, ADC1_CH6",
+            "recommended": true
+          },
+          {
+            "gpio": 35,
+            "label": "GPIO35",
+            "functions": [
+              "gpio",
+              "adc"
+            ],
+            "notes": "Input only, ADC1_CH7",
+            "recommended": true
+          },
+          {
+            "gpio": 36,
+            "label": "GPIO36",
+            "functions": [
+              "gpio",
+              "adc"
+            ],
+            "notes": "Input only, ADC1_CH0 (VP)",
+            "recommended": true
+          },
+          {
+            "gpio": 39,
+            "label": "GPIO39",
+            "functions": [
+              "gpio",
+              "adc"
+            ],
+            "notes": "Input only, ADC1_CH3 (VN)",
+            "recommended": true
+          }
+        ],
+        "specialPins": {
+          "i2c": {
+            "sda": 21,
+            "scl": 22
+          },
+          "spi": {
+            "mosi": 23,
+            "miso": 19,
+            "sck": 18,
+            "cs": 5
+          },
+          "power": {
+            "vcc": 3.3,
+            "gnd": 0,
+            "vin": 5
+          }
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-0",
+      "source": "lipo-battery-3-7v-small_1",
+      "target": "board",
+      "sourceHandle": "VCC/BAT+",
+      "targetHandle": "power",
+      "type": "smoothstep",
+      "data": {
+        "wireType": "power",
+        "label": "VCC/BAT+ → VCC",
+        "color": "#ff0000"
+      }
+    },
+    {
+      "id": "edge-1",
+      "source": "lipo-battery-3-7v-small_1",
+      "target": "board",
+      "sourceHandle": "GND/BAT-",
+      "targetHandle": "ground",
+      "type": "smoothstep",
+      "data": {
+        "wireType": "ground",
+        "label": "GND/BAT- → GND",
+        "color": "#000000"
+      }
+    },
+    {
+      "id": "edge-2",
+      "source": "button_2",
+      "target": "board",
+      "sourceHandle": "GND",
+      "targetHandle": "ground",
+      "type": "smoothstep",
+      "data": {
+        "wireType": "ground",
+        "label": "GND → GND",
+        "color": "#000000"
+      }
+    },
+    {
+      "id": "edge-3",
+      "source": "button_3",
+      "target": "board",
+      "sourceHandle": "GND",
+      "targetHandle": "ground",
+      "type": "smoothstep",
+      "data": {
+        "wireType": "ground",
+        "label": "GND → GND",
+        "color": "#000000"
+      }
+    }
+  ]
+}

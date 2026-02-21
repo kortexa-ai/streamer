@@ -1,0 +1,7 @@
+componentId,pinName,boardPin,function
+lipo-battery-3-7v-small_1,VCC/BAT+,-1,power
+lipo-battery-3-7v-small_1,GND/BAT-,-2,ground
+button_2,GND,-2,ground
+button_2,SIGNAL,0,digital
+button_3,GND,-2,ground
+button_3,SIGNAL,0,digital

@@ -1,0 +1,19 @@
+# Build artifacts
+build/
+*.elf
+*.bin
+*.hex
+*.map
+
+# Arduino CLI cache
+.arduino/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor/IDE
+.vscode/
+*.swp
+*.swo
+*~
