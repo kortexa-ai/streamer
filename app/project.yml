@@ -11,6 +11,7 @@ targets:
       - Streamer
     settings:
       base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.kortexa.streamer
         INFOPLIST_FILE: Streamer/Info.plist
         CODE_SIGN_ENTITLEMENTS: Streamer/Streamer.entitlements
         DEVELOPMENT_TEAM: C49792BN94
